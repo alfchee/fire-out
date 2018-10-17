@@ -1,4 +1,4 @@
-const FirebaseIO = require("./helpers/FirebaseIO.js");
+const FirebaseIO = require("./dbIO/FirebaseIO.js");
 
 class ETL {
     constructor(params) {
