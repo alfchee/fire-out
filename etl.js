@@ -1,4 +1,5 @@
 const FirebaseIO = require("./dbIO/FirebaseIO.js");
+const DynamoDBIO = require("./dbIO/DynamoDBIO.js");
 
 class ETL {
     constructor(params) {
@@ -14,16 +15,37 @@ class ETL {
     pullFromFirebasePushToDynamoDB() {
         // instantiating class that works with firebase
         const fireIO = new FirebaseIO();
+        const dyDBIO = new DynamoDBIO();
+        // max items per batch processing
+        // check documentation https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB.html#batchWriteItem-property
+        const maxBatchInput = 25;
+        
         console.log('start to pull!');
         
         // getting data from one collection node using the path 
         const dataFrom = fireIO.fetchData(this.firebaseCollection);
         
+        let batchInputs = [];
+        let counter = 0;
         // if we got results, then proess them
         dataFrom.then(results => {
-            console.log(results);
-        
             console.log('start to push!');
+            
+            results.forEach((i, record) => {
+                // adding the record into the batch
+                if(counter < 25) {
+                    batchInputs.push(record);
+                } else {
+                    // make the batch insert
+                    dyDBIO.batchInsert(this.firebaseCollection, batchInputs);
+                    
+                    // clear the variables
+                    batchInputs = [];
+                    counter = 0;
+                }
+                // increasing the counter
+                counter++;
+            });
             
             // if is required to transform the data before to push to Destiny
             if(this.processIt) {
