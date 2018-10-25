@@ -4,8 +4,10 @@ const dbConf = require("../config/db.js");
 
 class FirebaseIO {
     
-    constructor() {
-        console.log('FirebaseIO turn on engines!');
+    constructor(logger) {
+        this.logger = logger;
+        this.logger.info('FirebaseIO turn on engines!!');
+        
         // initializing the connection with firebase database
         firebase.initializeApp({
             credential: firebase.credential.cert(dbConf.firebase.cert),
@@ -46,16 +48,28 @@ class FirebaseIO {
     snapshotToArray(snapshot) {
         const returnArray = [];
         
-        // going by each of the first level childs of the snapshot
-        snapshot.forEach(child => {
-            // getting all the values of the child
-            let item = child.val();
-            // getting the key of the child
-            item.key = child.key;
-            
-            // adding it to the array to return
-            returnArray.push(item);
-        });
+        try {
+            // going by each of the first level childs of the snapshot
+            snapshot.forEach(child => {
+                let item = {};
+                
+                if(typeof child.val() === 'object') {
+                    // getting all the values of the child
+                    item = child.val();
+                } else {
+                    item[child.key] = child.val();
+                }
+                
+                // getting the key of the child
+                item.key = child.key;
+                
+                // adding it to the array to return
+                returnArray.push(item);
+            });
+        }
+        catch(err) {
+            this.logger.debug(JSON.stringify(err.stack));
+        }
         
         return returnArray;
     }
