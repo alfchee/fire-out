@@ -58,47 +58,35 @@ class ETL {
         // getting data from one collection node using the path 
         const dataFrom = fireIO.fetchData(this.firebaseCollection);
         
-        let batchInputs = [];
-        let counter = 0;
+        // let batchInputs = [];
+        // let counter = 0;
         // if we got results, then proess them
         dataFrom
             .then(results => {
+                this.logger.info('Obtained ' + results.length + ' objects to process');
                 this.logger.info('start to push!');
                 
-                results.forEach((i, record) => {
-                    // adding the record into the batch
-                    if(counter < 25) {
-                        batchInputs.push(record);
-                    } else {
-                        // consult if the table does exist befor to try to push data
-                        dyDBIO.tableExists(tableName)
-                            .then(exists => {
-                                if(exists) {
-                                    // make the batch insert
-                                    dyDBIO.batchInsert(tableName, batchInputs);
-                                    // clear the variables
-                                    batchInputs = [];
-                                    counter = 0;
-                                } else {
-                                    // then we should better create the table firstly
-                                    dyDBIO.createTable(tableName).then(tableData => {
-                                        if(tableData) {
-                                            // then make the batch insert
-                                            dyDBIO.batchInsert(tableName, batchInputs);
-                                            // clear the variables
-                                            batchInputs = [];
-                                            counter = 0;
-                                        }
-                                    });
+                // consult if the table does exist befor to try to push data
+                dyDBIO.tableExists(tableName)
+                    .then(exists => {
+                        if(exists) {
+                            this.logger.info('Table ' + tableName + ' already exists...');
+                            // make the batch insert
+                            dyDBIO.batchInsert(tableName, results);
+                        } else {
+                            this.logger.info('Table ' + tableName + ' doesnt exists... creating table...');
+                            // then we should better create the table firstly
+                            dyDBIO.createTable(tableName).then(tableData => {
+                                if(tableData) {
+                                    // then make the batch insert
+                                    dyDBIO.batchInsert(tableName, results);
                                 }
-                            })
-                            .catch(err => {
-                                this.logger.debug('Error checking Table exists. Error JSON: ' + JSON.stringify(err));
                             });
-                    }
-                    // increasing the counter
-                    counter++;
-                });
+                        }
+                    })
+                    .catch(err => {
+                        this.logger.debug('Error checking Table exists. Error JSON: ' + JSON.stringify(err));
+                    });
                 
                 // if is required to transform the data before to push to Destiny
                 if(this.processIt) {
@@ -106,8 +94,8 @@ class ETL {
                     this.logger.info('process the data before to push!');
                 }
                 
-                this.logger.info('END the work!');
-                process.exit();
+                // this.logger.info('END the work!');
+                // process.exit();
             })
             .catch(err => {
                this.logger.debug('Error on fetching data from Firebase. Error JSON: ' + JSON.stringify(err)); 

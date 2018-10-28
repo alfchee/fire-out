@@ -53,15 +53,10 @@ class FirebaseIO {
             snapshot.forEach(child => {
                 let item = {};
                 
-                if(typeof child.val() === 'object') {
-                    // getting all the values of the child
-                    item = child.val();
-                } else {
-                    item[child.key] = child.val();
-                }
-                
-                // getting the key of the child
+                // recovering the key
                 item.key = child.key;
+                // getting all the values of the child
+                item = { ...child.val(), ...item };
                 
                 // adding it to the array to return
                 returnArray.push(item);
@@ -70,7 +65,7 @@ class FirebaseIO {
         catch(err) {
             this.logger.debug(JSON.stringify(err.stack));
         }
-        
+
         return returnArray;
     }
 }

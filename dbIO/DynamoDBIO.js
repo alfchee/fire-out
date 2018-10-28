@@ -1,11 +1,14 @@
 const AWS = require('aws-sdk');
 const fs = require('fs');
+const attr = require('dynamodb-data-types').AttributeValue;
+const _ = require('lodash');
+const dbConf = require("../config/db.js");
 
 // connection for testings
-AWS.config.update({
-  region: "us-west-2",
-  endpoint: "http://localhost:8000"
-});
+// AWS.config.update({
+//   region: "local",
+//   endpoint: "http://localhost:8000"
+// });
 
 
 class DynamoDBIO {
@@ -14,8 +17,10 @@ class DynamoDBIO {
         this.logger = logger;
         this.logger.info("DynamoDBIO turn on engines!");
         
+        AWS.config.update(dbConf.dynamodb)
+        
         // getting the DynamoDB instance
-        this.dynamodb = new AWS.DynamoDB();
+        this.dynamodb = new AWS.DynamoDB({apiVersion: '2012-10-08'});
     }
     
     /**
@@ -34,8 +39,8 @@ class DynamoDBIO {
                 { AttributeName: 'tableName', AttributeType: 'S' }
             ],
             ProvisionedThroughput: {
-                ReadCapacityUnits: 5, 
-                WriteCapacityUnits: 5
+                ReadCapacityUnits: 25, 
+                WriteCapacityUnits: 25
             }
         };
         
@@ -86,20 +91,25 @@ class DynamoDBIO {
             TableName: tableName
         };
         
+        this.logger.debug('Params for tableExists: ' + JSON.stringify(params));
+        
         // creating and returning the Promise 
         return new Promise((resolve, reject) => {
-            // making the request of the description
-            this.dynamodb.describeTable(params, (err, data) => {
-                if(err) {
-                    // some error occurred, may be doesn't exists but also can be another thing
-                    this.logger.debug('Error on describeTable, Error: ' + JSON.stringify(err));
+            // making the request to check if the table exists
+            this.dynamodb.waitFor('tableExists', params, (err, data) => {
+                // some error occurred, may be doesn't exists but also can be another thing
+                if (err) {
+                    this.logger.debug('Error on tableExists. Error JSON: ' + JSON.stringify(err));
+                    // console.log(err, err.stack); // an error occurred
                     // for now, we are going to interpreta that if error then the table doesn't exists
                     resolve(false);
-                } else {
+                }
+                else {
                     // if no error then the table aready exists
+                    // console.log(data);           // successful response
                     resolve(true);
                 }
-            })
+            });
         });
     }
     
@@ -113,28 +123,76 @@ class DynamoDBIO {
         let params = {
             RequestItems: {}
         };
+        let icount = 0;
+        let recursive = false;
+        const BreakException = {};
+        
+        // const mapExceptions = { types: { public: 'B', private: 'B' } };
+        
         params.RequestItems[tableName] = [];
         
         // processing the items to insert
-        const putRequests = [];
+        // const putRequests = [];
         
-        insertItems.forEach(item => {
-           let request = {
-                PutRequest: {
-                    Item: {}
+        if(insertItems.length > 25) {
+            recursive = true;
+        }
+        
+        try {
+            insertItems.forEach(item => {
+                let request = {
+                    PutRequest: {
+                        Item: {}
+                    }
+                };
+                
+                request.PutRequest.Item.tableName = { 'S': item.key };
+                delete item.key;
+                
+                request.PutRequest.Item = { ...request.PutRequest.Item, ...attr.wrap(item, mapExceptions) };
+                console.log(attr.wrap(item, mapExceptions)); process.exit();
+                
+                // adding each insert request object
+                params.RequestItems[tableName].push(request);
+                icount++;
+                
+                // removing current item from insertItems
+                let index = insertItems.findIndex(element => {
+                    return _.isEqual(element, item);
+                });
+                
+                if(index > -1) {
+                    insertItems = insertItems.slice(index+1);
                 }
-           };
-           
-           // adding each insert request object
-           params.RequestItems[tableName].push(request);
-        });
+                
+                if(icount >= 25) {
+                //   insertItems = insertItems.slice(24);
+                   icount = 0;
+                   throw BreakException;
+                }
+            });
+        } catch(e) {
+            if (e !== BreakException) throw e;
+        }
+        
+        
+        // console.log(insertItems.length, params.RequestItems[tableName].length); process.exit();
+        // this.logger.debug(JSON.stringify(params)); process.exit();
         
         // after generates all the params, then batch to save
         this.dynamodb.batchWriteItem(params, (err, data) => {
             if(err) {
                 this.logger.debug("Error inserting data. JSON Error: " + JSON.stringify(err));
+                process.exit(1);
             } else {
-                this.logger.info('Success: ', data);
+                if(recursive) {
+                    this.logger.info('Batch inserted!');
+                    this.batchInsert(tableName, insertItems);
+                } else {
+                    this.logger.info('Success: ', data);
+                    this.logger.info('END the work!');
+                    process.exit();
+                }
             }
         });
     }
