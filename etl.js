@@ -1,6 +1,7 @@
 const { createLogger, format, transports } = require('winston');
 const fs = require('fs');
 const path = require('path');
+const Json2csvParser = require('json2csv').Parser;
 
 const FirebaseIO = require("./dbIO/FirebaseIO.js");
 const DynamoDBIO = require("./dbIO/DynamoDBIO.js");
@@ -11,6 +12,7 @@ class ETL {
         this.firebaseCollection = params.firebaseCollection;
         this.source = params.source;
         this.processIt = params.processIt;
+        this.usersDestiny = params.usersDestiny;
         
         const logDir = 'log';
         
@@ -106,6 +108,39 @@ class ETL {
             console.error(err);
             process.exit(1);
         });
+    }
+    
+    fetchAndSaveUsers() {
+        // instantiating class that works with firebase
+        const fireIO = new FirebaseIO(this.logger);
+        
+        const usersResult = fireIO.fetchAllUsers();
+        const fields = [
+            'cognito:username','name','given_name','family_name','middle_name','nickname','preferred_username','profile',
+            'picture','website','email','email_verified','gender','birthdate','zoneinfo','locale','phone_number','phone_number_verified',
+            'address','updated_at','cognito:mfa_enabled'
+        ];
+        
+        usersResult
+            .then(collection => {
+                
+                const parserCSV = new Json2csvParser({ fields });
+                const csv = parserCSV.parse(collection);
+                
+                fs.writeFile('users.csv', csv, 'UTF-8', (err) => {
+                    if(err) {
+                        this.logger.debug(JSON.stringify(err));
+                        throw err;
+                    }
+                    
+                    this.logger.info('Done!!! Users saved at users.csv file.');
+                    process.exit();
+                });
+            })
+            .catch(err => {
+                this.logger.debug(JSON.stringify(err));
+                process.exit(1);
+            });
     }
 }
 

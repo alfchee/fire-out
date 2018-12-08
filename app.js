@@ -24,6 +24,20 @@ program
             etl.pullFromFirebasePushToDynamoDB();
         }
     });
+    
+program
+    .command('fetch-users [options]')
+    .option('-s, --source <source>', 'Set the source connection')
+    .option('-d, --destiny <destiny>', 'Set where the output is going to')
+    .action((env, options) => {
+        // Instantiating the ETL class
+        const etl = new ETL({
+            source: options.source,
+            usersDestiny: options.destiny
+        });
+        
+        etl.fetchAndSaveUsers();
+    })
 
 // passing the arguments to start the app
 program.parse(process.argv);

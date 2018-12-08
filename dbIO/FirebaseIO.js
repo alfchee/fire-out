@@ -16,6 +16,8 @@ class FirebaseIO {
         
         // creating a short access to database from inside the class
         this.database = firebase.database();
+        // creating a short access to auth from inside the class
+        this.auth = firebase.auth();
     }
     
     /**
@@ -67,6 +69,78 @@ class FirebaseIO {
         }
 
         return returnArray;
+    }
+    
+    fetchAllUsers(nextPageToken) {
+        // let nextPageToken = null;
+        let usersCollection = [];
+        
+        this.logger.info('Fetching all the users fromm Firebase...');
+        
+        return new Promise((resolve, reject) => {
+            // List batch of users, 1000 at a time.
+            this.auth.listUsers(1000, nextPageToken)
+                .then(listUsersResult => {
+                    if(listUsersResult.users.length > 0) {
+                        this.logger.info('Getting a lot of users...');
+                    
+                        listUsersResult.users.forEach(userRecord => {
+                            usersCollection.push(userRecord.toJSON());
+                        });
+                        
+                        resolve(this.normalizeUsers(usersCollection));
+                        // if(listUsersResult.pageToken) {
+                        //     this.fetchAllUsers(listUsersResult.pageToken);
+                        // }
+                    } else {
+                        this.logger.info('No more users to fetch...');
+                        resolve(usersCollection);
+                    }
+                })
+                .catch(err => {
+                    this.logger.debug(JSON.stringify(err.stack));
+                    reject(err);
+                });
+        });
+    }
+    
+    
+    normalizeUsers(usersCollection) {
+        let normalizedUsers = [];
+        
+        this.logger.info('Normalizing users...');
+        
+        usersCollection.forEach(user => {
+            let username = user.email.slice(0, user.email.indexOf('@'));
+            
+            let newuser = {
+                'cognito:username': username,
+                'name': '',
+                'given_name': '',
+                'family_name': '',
+                'middle_name': '',
+                'nickname': '',
+                'preferred_username': '',
+                'profile': '',
+                'picture': '',
+                'website': '',
+                'email': user.email,
+                'email_verified': user.emailVerified,
+                'gender': '',
+                'birthdate': '',
+                'zoneinfo': '',
+                'locale': '',
+                'phone_number': '',
+                'phone_number_verified': false,
+                'address': '',
+                'updated_at': '',
+                'cognito:mfa_enabled': false
+            };
+            
+            normalizedUsers.push(newuser);
+        });
+        
+        return normalizedUsers;
     }
 }
 

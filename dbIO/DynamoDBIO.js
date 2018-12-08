@@ -146,12 +146,16 @@ class DynamoDBIO {
                     }
                 };
                 
-                request.PutRequest.Item.tableName = { 'S': item.key };
-                delete item.key;
+                request.PutRequest.Item['id'] = { 'S': item.key };
+                // delete item.key;
                 
-                request.PutRequest.Item = { ...request.PutRequest.Item, ...attr.wrap(item, mapExceptions) };
-                console.log(attr.wrap(item, mapExceptions)); process.exit();
+                let forBinary = {};
                 
+                let cleanItem = this.cleanObject(item);
+                // this.logger.debug(JSON.stringify(item));
+                
+                request.PutRequest.Item = { ...request.PutRequest.Item, ...attr.wrap(cleanItem) };
+                // this.logger.debug(JSON.stringify(request.PutRequest.Item)); process.exit();
                 // adding each insert request object
                 params.RequestItems[tableName].push(request);
                 icount++;
@@ -175,9 +179,10 @@ class DynamoDBIO {
             if (e !== BreakException) throw e;
         }
         
-        
+        // this.logger.debug(JSON.stringify(params)); process.exit();
         // console.log(insertItems.length, params.RequestItems[tableName].length); process.exit();
         // this.logger.debug(JSON.stringify(params)); process.exit();
+        // this.logger.debug(JSON.stringify(params));
         
         // after generates all the params, then batch to save
         this.dynamodb.batchWriteItem(params, (err, data) => {
@@ -187,6 +192,8 @@ class DynamoDBIO {
             } else {
                 if(recursive) {
                     this.logger.info('Batch inserted!');
+                    // this.logger.info('New insert:::::::::::::::');
+                    // this.logger.debug(JSON.stringify(insertItems));
                     this.batchInsert(tableName, insertItems);
                 } else {
                     this.logger.info('Success: ', data);
@@ -195,6 +202,24 @@ class DynamoDBIO {
                 }
             }
         });
+    }
+    
+    cleanObject(obj) {
+        let newObj = {};
+        
+        Object.keys(obj).forEach(key => {
+            if(obj[key] && typeof obj[key] === 'object') {
+                this.cleanObject(obj[key]);
+            } else if(obj[key] && typeof obj[key] === 'string') {
+                if(obj[key].length > 0) {
+                    newObj[key] = obj[key];
+                }
+            } else if(obj[key] && typeof obj[key] !== 'string') {
+                newObj[key] = obj[key];
+            }
+        });
+        
+        return newObj;
     }
 }
 
